@@ -16,15 +16,19 @@ export class CPBScraper {
       try {
         await this.goToWeekLessonPage()
 
-        const [weekLessons, introduction, auxiliar] = await Promise.all([
+        const [weekLessons, introduction, auxiliar, info, comment] = await Promise.all([
           this.getLessons(),
           this.getIntroductionLesson(),
-          this.getAuxiliaryLesson()
+          this.getAuxiliaryLesson(),
+          this.getInfo(),
+          this.getComment()
         ])
 
         lessons = weekLessons
         lessons.unshift(introduction)
         lessons.push(auxiliar)
+        lessons.push(info)
+        lessons.push(comment)
       } catch (error) {
         console.error('Error', error)
       } finally {
@@ -106,6 +110,80 @@ export class CPBScraper {
 
       if (content && title && kicker) {
         content = this.cleanBrownserError(content)
+
+        return {
+          content,
+          title,
+          kicker
+        }
+      }
+
+      throw new Error('There is a problem to retrive data')
+    }
+
+    private async getInfo () : Promise<Lesson> {
+      const selector = '#licaoInformativo'
+      let [title, content] = await Promise.all([
+        this.getTextContent(`${selector} .conteudoLicaoDia p`),
+        this.getTextContent(`${selector} .conteudoLicaoDia`)
+      ])
+
+      if (content && title) {
+        content = this.cleanBrownserError(content)
+
+        content = content.replace(title, '').trim()
+
+        return {
+          content,
+          title
+        }
+      }
+
+      throw new Error('There is a problem to retrive data')
+    }
+
+    private async getComment () : Promise<Lesson> {
+      const selector = '#licaoComentario'
+      let [title, titleRaw, kicker, content, autor, autorRaw] = await Promise.all([
+        this.page.$$eval(`${selector} .conteudoLicaoDia p:nth-child(1) b`, (els: Element[]) => {
+          const contents: string[] = []
+
+          els.forEach(el => {
+            const textContent = el.textContent
+            if (textContent) {
+              contents.push(textContent)
+            }
+          })
+
+          return contents.join('\n')
+        }),
+        this.getTextContent(`${selector} .conteudoLicaoDia p:nth-child(1)`),
+        this.getTextContent(`${selector} .conteudoLicaoDia p:nth-child(2)`),
+        this.getTextContent(`${selector} .conteudoLicaoDia`),
+        this.page.$$eval(`${selector} .conteudoLicaoDia p:nth-child(3) b`, (els: Element[]) => {
+          const contents: string[] = []
+
+          els.forEach(el => {
+            const textContent = el.textContent
+            if (textContent) {
+              contents.push(textContent)
+            }
+          })
+
+          return contents.join('\n')
+        }),
+        this.getTextContent(`${selector} .conteudoLicaoDia p:nth-child(3)`)
+      ])
+
+      if (content && title && titleRaw && kicker) {
+        content = this.cleanBrownserError(content)
+
+        content = content.replace(titleRaw, '').trim()
+        content = content.replace(kicker, '').trim()
+
+        if (autor && autorRaw) {
+          content = content.replace(autorRaw, autor).trim()
+        }
 
         return {
           content,
